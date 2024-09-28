@@ -1,7 +1,11 @@
-RegisterNetEvent("gigo-trucking:server:endJob", function (money)
+RegisterNetEvent("gigo-trucking:server:reward", function ()
     local src = source
     local Player = exports.qbx_core:GetPlayer(src)
-    if not (Player or Job[Player.PlayerData.citizenid]) then return end
-    Player.Functions.AddMoney('cash', money, "Trucking job paycheck")
-    Notification("Trucking", ("You have completed the contract successfully and earned $: %s !"):format(money), 8000, "success")
+    if not Player then return end
+    Player.Functions.AddMoney('cash', money)
+    TriggerClientEvent('ox_lib:notify', src, {
+        title = "Trucking",
+        description = ("You have successfully completed the contract and received your payment: $%s"):format(money) ,
+        type = "success",
+        duration = 8000})
 end)
