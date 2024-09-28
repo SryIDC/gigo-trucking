@@ -1,112 +1,25 @@
-local jobTruck
-local trailerDeliveryLOC
-local jobTrailer
-local pickupLOC
+onJob = false
+local Contract
+local JobTruck
+local JobTrailer
 local trailerAttached = false
-local jobTruckDeleteZone
-local trailerDeliveryZone
-local availJobs = Config.Job.trailer
-local jobMenu
-local hasTrailer, trailerEntity = nil, nil
-local GJob
 
+local function RequestModel(model, timeout)
+    lib.requestModel(model, timeout)
+    local hash = model
 
--- Start of Functions
-local function JobGenerator()
-    local selected = {}
-    local tempList = {}
-
-    for i, v in ipairs(availJobs) do
-        table.insert(tempList, v)
+    while not HasModelLoaded(hash) do
+        Wait(1000)
     end
 
-    -- Select 3 random jobs
-    for i = 1, 3 do
-        if #tempList == 0 then
-            break
-        end
-
-        local randIndex = math.random(1, #tempList)
-        table.insert(selected, table.remove(tempList, randIndex))
-    end
-
-    return selected
+    return hash
 end
 
+function OpenMenu()
+    local randomJobs = lib.callback.await("gigo-trucking:client:RandomJob", false)
+    local jobMenu = {}
 
-
---Spawn job Vehicle
-local function SpawnJobVehicle()
-    local truckSpawn = Config.Job.truckSpawn
-    lib.requestModel(GJob.truck, 5000)
-
-    local playerPed = PlayerPedId()
-    local truckhash = GetHashKey(GJob.truck)
-    
-    jobTruck = CreateVehicle(truckhash, truckSpawn.x, truckSpawn.y, truckSpawn.z, truckSpawn.w, true, false)
-    TaskWarpPedIntoVehicle(playerPed, jobTruck, -1)
-    Notification("Trucking", "Drive to the pickup location!", 8000, "inform")
-    SetVehicleEngineOn(jobTruck, true, true, false)
-end
-
-local function SpawnJobTrailer()
-    lib.requestModel(GJob.trailer, 5000)
-
-    local pickup = GJob.pickup
-    local trailerLoc = pickup
-    local trailerHash = GetHashKey(GJob.trailer)
-    
-    jobTrailer = CreateVehicle(trailerHash, pickup.x, pickup.y, pickup.z, pickup.w, true, false)
-    SetVehicleEngineOn(jobTrailer, true, true, false)
-
-    pickupLOC = CreateBlip(trailerLoc, 1, 5, 1.0, "Trailer")
-end
-
-function EndJob()
-    local playerPed = PlayerPedId()
-    local money = GJob.payment
-    if DoesBlipExist(trailerDeliveryLOC) then
-        RemoveBlip(trailerDeliveryLOC)
-    end
-    if DoesBlipExist(jobTruckDeleteZone) then
-        RemoveBlip(jobTruckDeleteZone)
-    end
-    deleteVehZone = lib.points.new({
-        coords = vec3(1202.7256, -3241.0471, 5.96710),
-        distance = 8,
-        onEnter = function (self)
-            local vehicle = GetVehiclePedIsIn(playerPed, false)
-            if vehicle == jobTruck then
-                trailerAttached = false
-                TriggerServerEvent("gigo-trucking:server:endJob", money)
-                TaskLeaveVehicle(cache.ped, vehicle, 0)
-                Wait(1000)
-                if DoesEntityExist(jobTruck) then
-                    DeleteEntity(jobTruck)
-                end
-                if DoesBlipExist(jobTruckDeleteZone) then   
-                    RemoveBlip(jobTruckDeleteZone)
-                end
-                Job = false
-                GJob = nil
-                hasTrailer, trailerEntity = nil, nil
-                deleteVehZone:remove()
-            end
-            
-        end
-    })
-
-    local delT = Config.Job.deletetruck
-
-    jobTruckDeleteZone = CreateBlip(delT, 1, 5, 1.0, "Drop Truck")
-end
-
-function RegisterJobMenu()
-
-    local jobs = JobGenerator()
-    jobMenu = {}
-
-    for i, job in ipairs(jobs) do
+    for i, job in ipairs(randomJobs) do
         table.insert(jobMenu, {
             label = job.label,
             description = "Payment: $"..job.payment,
@@ -115,54 +28,29 @@ function RegisterJobMenu()
     end
 
     lib.registerMenu({
-        id = 'trucking_jobs_menu',
-        title = 'Available Jobs',
+        id = "openTruckingMenu",
+        title = "Available Jobs",
         position = "top-right",
         options = jobMenu
-    }, function(selected)
+    }, function (selected)
         local selectedJob = jobMenu[selected]
-        GJob = selectedJob.args
-        TriggerEvent("gigo-trucking:client:acceptContract")
+        Contract = selectedJob.args
+        TriggerEvent("gigo-trucking:client:AcceptContract")
     end)
 end
 
-local function TrailerPickedUP()
-    local playerPed = PlayerPedId()
-    local vehicle = GetVehiclePedIsIn(playerPed, false)
-    if vehicle and DoesEntityExist(jobTrailer) then 
-        hasTrailer, trailerEntity = GetVehicleTrailerVehicle(vehicle)
-
-        if hasTrailer and DoesEntityExist(trailerEntity) then
-            if DoesBlipExist(pickupLOC) then
-                RemoveBlip(pickupLOC)
-            end
-            Notification("Trucking", "Trailer attached!", 5000, "success")
-            trailerAttached = true
-            TriggerEvent("gigo-trucking:client:startDropRide")
-        elseif trailerAttached then
-            Notification("Trucking", "You already have a trailer attached.", 3000, "inform")
-        end
-    end
+local function SpawnJobVehicles()
+    local Truck = RequestModel(Contract.truckModel, 5000)
+    local Trailer = RequestModel(Contract.trailerModel, 5000)
+    local TruckPickup = Config.Job.TruckSpawnLoc
+    local TrailerPickup = Contract.pickup
+    JobTruck = CreateVehicle(Truck, TruckPickup.x, TruckPickup.y, TruckPickup.z, TruckPickup.w, true, false)
+    JobTrailer = CreateVehicle(Trailer, TrailerPickup.x, TrailerPickup.y, TrailerPickup.z, TrailerPickup.w, true, false)
 end
 
+RegisterNetEvent( "gigo-trucking:client:AcceptContract",function()
+    SpawnJobVehicles()
 
---Functions End
-
-
-
---Start of Events
---Checking if trailer has been attached to truck
-local function CheckTrailer()
-    while not trailerAttached do
-        Wait(500)
-        TrailerPickedUP()
-    end
-end
-    
-
---Accepting Contract
-RegisterNetEvent("gigo-trucking:client:acceptContract", function ()
-    JobGenerator()
     if lib.progressBar({
         duration = 5000,
         label = 'Accepting contract',
@@ -183,49 +71,121 @@ RegisterNetEvent("gigo-trucking:client:acceptContract", function ()
             rot = vec3(-130.0, -50.0, 0.0)
         },
     }) then 
-        Job = true
-        SpawnJobVehicle()
-        SpawnJobTrailer()
-        CheckTrailer()
+        onJob = true
+        TriggerEvent("gigo-trucking:client:startJob")
      end
-    
 end)
 
+RegisterNetEvent("gigo-trucking:client:startJob", function ()
+    local TrailerLoc = CreateRoute(Contract.trailerPickUpLocation, "Trailer")
+    TaskWarpPedIntoVehicle(cache.ped, JobTruck, -1)
+    Notification("Drive to the trailer's location and attach trailer to the truck!", "inform", 8000)
+    CheckTrailerStatus()
+end)
 
---Picking up trailer and heading to delivery point
-RegisterNetEvent("gigo-trucking:client:startDropRide", function ()
+function CheckTrailerStatus()
+    while not trailerAttached do
+        Wait(500)
+        TriggerEvent("gigo-trucking:client:trailerAttached")
+    end
+end
+
+RegisterNetEvent("gigo-trucking:client:trailerAttached", function ()
     local playerPed = PlayerPedId()
-    trailerDeliveryZone = lib.zones.box({
-        coords = vec3(GJob.drop.x, GJob.drop.y, GJob.drop.z),
-        size = vec3(8,8,8),
+    local vehicle = GetVehiclePedIsIn(playerPed, false)
+    if vehicle and DoesEntityExist(jobTrailer) then 
+        local hasTrailer, trailerEntity = GetVehicleTrailerVehicle(vehicle)
+        if hasTrailer and DoesEntityExist(trailerEntity) then
+            if DoesBlipExist(TrailerLoc) then
+                RemoveBlip(TrailerLoc)
+            end
+            Notification("Trailer attached!", 5000, "success")
+            trailerAttached = true
+            TriggerEvent("gigo-trucking:client:DeliveryStart")
+        end
+    end
+end)
+
+RegisterNetEvent("gigo-trucking:client:DeliveryStart", function ()
+    local DropLoc = Contract.trailerDropLocation
+    local DeliveryBlip = CreateRoute(DropLoc, "Delivery Location")
+    local DeliveryPoint = lib.points.new({
+        coords = vec3(DropLoc.x, DropLoc.y, DropLoc.z),
+        distance = 2.0,
         onEnter = function ()
-            if IsVehicleAttachedToTrailer(jobTruck) then
-                FreezeEntityPosition(jobTruck, true)
-                if lib.progressBar({
-                    duration = 5000,
-                    label = 'Detaching trailer...',
-                    useWhileDead = false,
-                    canCancel = false,
-                    disable = {
-                        car = true,
-                        move = true,
-                    },
-                }) then 
-                    DetachVehicleFromTrailer(jobTruck)
-                    
-                    FreezeEntityPosition(cache.vehicle, false)
-                    EndJob()
-                    if DoesBlipExist(trailerDeliveryLOC) then
-                        RemoveBlip(trailerDeliveryLOC)
-                    end
-                    DeleteEntity(jobTrailer)
-                    Notification("Trucking", "You have completed your contract!\n Get Back to the contracter and deliver the vehicle!", 5000, "success")
-                    trailerDeliveryZone:remove()
-                 end
+            if GetVehiclePedIsIn(cache.ped, false) == JobTruck and IsPedInAnyVehicle(cache.ped, false) then
+                lib.showTextUI("[E] - Deliver trailer!", {
+                    icon = "fa-solid fa-trailer"
+                })
+                if IsControlJustReleased(0, 38) then
+                    if lib.progressBar({
+                        duration = 5000,
+                        label = 'Detaching trailer...',
+                        useWhileDead = false,
+                        canCancel = false,
+                        disable = {
+                            car = true,
+                            move = true,
+                        },
+                    }) then 
+                        if DoesEntityExist(JobTrailer) then
+                            DeleteEntity(JobTrailer)
+                        end
+                        if DoesBlipExist(DeliveryBlip) then
+                            RemoveBlip(DeliveryBlip)
+                        end
+                        TriggerEvent("gigo-trucking:client:TruckDelivery")
+                        DeliveryPoint:remove()
+                     end
+                end
+            end
+        end,
+        onExit = function ()
+            lib.hideTextUI()
+        end
+    })
+end)
+
+RegisterNetEvent("gigo-trucking:client:TruckDelivery", function ()
+    local TruckDeliveryLoc = Config.Job.TruckDelivery
+    local TruckDeliveryBlip = CreateRoute(TruckDeliveryLoc, "Deliver truck here")
+    local TruckDeliveryZone = lib.points.new({
+        coords = vec3(TruckDeliveryLoc.xyz),
+        distance = 2.0,
+        onEnter = function ()
+            if IsPedInAnyVehicle(cache.ped, false) and GetVehiclePedIsIn(cach.ped, false) == JobTruck then
+                FreezeEntityPosition(JobTruck, true)
+                TaskLeaveVehicle(cache.ped, JobTruck, 0)
+                Wait(5000)
+                FreezeEntityPosition(JobTruck, false)
+                if DoesEntityExist(JobTruck) then
+                    DeleteEntity(JobTruck)
+                end
+                if DoesBlipExist(TruckDeliverBlip) then 
+                    RemoveBlip(TruckDeliveryBlip)
+                end
+                TriggerServerEvent("gigo-trucking:server:reward", Contract.payment)
+                TruckDeliveryZone:remove()
             end
         end
     })
-
-    trailerDeliveryLOC = CreateBlip(GJob.drop, 1, 5, 1.0, "Delivery Location")
 end)
-RegisterJobMenu()
+
+function CleanUp()
+    if DoesEntityExist(JobTruck) then
+        DeleteEntity(JobTruck)
+    end
+    if DoesEntityExist(JobTrailer) then
+        DeleteEntity(JobTruck)
+    end
+    if DoesBlipExist(TrailerLoc) then
+        RemoveBlip(TrailerLoc)
+    end
+    if DoesBlipExist(TruckDeliveryBlip) then
+        RemoveBlip(TruckDeliveryBlip)
+    end
+    DeliveryPoint:remove()
+    TruckDeliveryZone:remove()
+    onJob = false
+    trailerAttached = false
+end
