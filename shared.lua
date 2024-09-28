@@ -2,7 +2,7 @@ Config = {}
 
 Config.Boss = {
     ped = "a_m_m_bevhills_02",
-    location = vec4(1197.1647, -3251.8413, 7.0952, 92.9338),
+    location = vec4(1197.0751, -3253.7573, 7.0952, 85.2750),
     blip = {
         enable = true,
         sprite = 477,

@@ -8,6 +8,7 @@ local trailerDeliveryZone
 local availJobs = Config.Job.trailer
 local jobMenu
 local hasTrailer, trailerEntity = nil, nil
+local GJob
 
 
 -- Start of Functions
@@ -35,7 +36,7 @@ end
 
 
 --Spawn job Vehicle
-local function SpawnJobVehicle(GJob)
+local function SpawnJobVehicle()
     local truckSpawn = Config.Job.truckSpawn
     lib.requestModel(GJob.truck, 5000)
 
@@ -48,7 +49,7 @@ local function SpawnJobVehicle(GJob)
     SetVehicleEngineOn(jobTruck, true, true, false)
 end
 
-local function SpawnJobTrailer(GJob)
+local function SpawnJobTrailer()
     lib.requestModel(GJob.trailer, 5000)
 
     local pickup = GJob.pickup
@@ -121,7 +122,7 @@ function RegisterJobMenu()
     }, function(selected)
         local selectedJob = jobMenu[selected]
         GJob = selectedJob.args
-        TriggerEvent("gigo-trucking:client:acceptContract", GJob)
+        TriggerEvent("gigo-trucking:client:acceptContract")
     end)
 end
 
@@ -150,10 +151,17 @@ end
 
 
 --Start of Events
-
+--Checking if trailer has been attached to truck
+local function CheckTrailer()
+    while not trailerAttached do
+        Wait(500)
+        TrailerPickedUP()
+    end
+end
+    
 
 --Accepting Contract
-RegisterNetEvent("gigo-trucking:client:acceptContract", function (GJob)
+RegisterNetEvent("gigo-trucking:client:acceptContract", function ()
     JobGenerator()
     if lib.progressBar({
         duration = 5000,
@@ -176,19 +184,13 @@ RegisterNetEvent("gigo-trucking:client:acceptContract", function (GJob)
         },
     }) then 
         Job = true
-        SpawnJobVehicle(GJob)
-        SpawnJobTrailer(GJob)
+        SpawnJobVehicle()
+        SpawnJobTrailer()
+        CheckTrailer()
      end
     
 end)
 
---Checking if trailer has been attached to truck
-CreateThread(function ()
-    while not trailerAttached do
-        Wait(500)
-        TrailerPickedUP()
-    end
-end)
 
 --Picking up trailer and heading to delivery point
 RegisterNetEvent("gigo-trucking:client:startDropRide", function ()

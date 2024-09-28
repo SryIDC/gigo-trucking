@@ -7,7 +7,12 @@ local function BossNPC()
     SetEntityInvincible(npc, true)
     FreezeEntityPosition(npc, true)
     SetBlockingOfNonTemporaryEvents(npc, true)
-    Wait(5000)
+    SetEntityAsMissionEntity(npc, true, true)
+
+    while not DoesEntityExist(npc) do
+        Wait(100)
+    end
+
     exports.ox_target:addLocalEntity(npc, {
         {
             label = "Job Menu",
